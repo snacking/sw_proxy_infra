@@ -1,0 +1,40 @@
+services:
+  hysteria:
+    image: tobyxdd/hysteria:v2
+    container_name: hy2
+    restart: always
+    network_mode: host
+    environment:
+      - HY2_PASSWORD=${HY2_PASSWORD}
+    volumes:
+      - ./hysteria2/config.yaml:/etc/hysteria/config.yaml
+      - ${CERT_PATH}:/etc/letsencrypt
+    command: ["server", "-c", "/etc/hysteria/config.yaml"]
+    logging: &default-logging
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx-fake:
+    image: nginx:alpine
+    container_name: nginx-fake
+    restart: always
+    ports:
+      - "${MASQUERADE_PORT}:${NGINX_LISTEN_PORT}"
+    environment:
+      - NGINX_LISTEN_PORT=${NGINX_LISTEN_PORT}
+    volumes:
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+    logging: *default-logging
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: always
+    ports:
+      - "${UPTIME_KUMA_PORT}:3001"
+    volumes:
+      - ./uptime-kuma:/app/data
+    logging: *default-logging

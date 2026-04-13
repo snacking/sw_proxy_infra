@@ -1,0 +1,83 @@
+name: Deploy Infra
+
+on:
+  push:
+    branches: [ main ]
+  repository_dispatch:
+    types: [redeploy]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.REMOTE_IP }}
+          username: ${{ secrets.REMOTE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            PROJECT_DIR="/root/sw_proxy_infra"
+            
+            if [ ! -d "$PROJECT_DIR" ]; then
+              git clone https://github.com/${{ github.repository }} $PROJECT_DIR
+            fi
+            cd $PROJECT_DIR
+            git pull origin main
+
+            echo "--- Generating .env configuration ---"
+            cat <<EOF > .env
+            HY2_PASSWORD=${{ secrets.HY2_PASSWORD }}
+            DOMAIN=${{ secrets.DOMAIN }}
+            CERT_PATH=${{ secrets.CERT_PATH }}
+            HY2_PORT=${{ secrets.HY2_PORT }}
+            MASQUERADE_PORT=${{ secrets.MASQUERADE_PORT }}
+            NGINX_LISTEN_PORT=${{ secrets.NGINX_LISTEN_PORT }}
+            UPTIME_KUMA_PORT=${{ secrets.UPTIME_KUMA_PORT }}
+            EOF
+
+            echo "Checking Nginx configuration template..."
+            docker run --rm --env-file .env \
+              -v $PROJECT_DIR/nginx/templates:/etc/nginx/templates:ro \
+              nginx:alpine \
+              sh -c "envsubst '\$NGINX_LISTEN_PORT' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -t" > /tmp/nginx_check 2>&1
+            
+            if [ $? -ne 0 ]; then
+              echo "Nginx config is invalid! Deployment aborted."
+              cat /tmp/nginx_check
+              exit 1
+            fi
+            
+            echo "Deployment starting..."
+            docker compose up -d --remove-orphans
+            docker restart nginx-fake
+
+            echo "--- Deployment Status ---"
+            sleep 5
+            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+            
+            echo "--- Health Check ---"
+            if [ "$(docker inspect -f '{{.State.Running}}' hy2)" == "true" ]; then
+              echo "Hysteria2 is running."
+            else
+              echo "Hysteria2 failed to start."
+              docker logs hy2 --tail 20
+              exit 1
+            fi
+
+      - name: Discord Notification
+        uses: rjstone/discord-webhook-notify@v1
+        if: always()
+        with:
+          severity: ${{ job.status == 'success' && 'info' || 'error' }}
+          details: |
+            **Deploy Status**: ${{ job.status }}
+            **Node**: `${{ secrets.DOMAIN }}:${{ secrets.HY2_PORT }}`
+            **Monitor**: `http://${{ secrets.REMOTE_IP }}:${{ secrets.UPTIME_KUMA_PORT }}`
+            **Password**: `${{ secrets.HY2_PASSWORD }}`
+            Triggered by: ${{ github.event_name }}
+          webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
