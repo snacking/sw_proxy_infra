@@ -14,6 +14,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Network Diagnostic
+        run: |
+          echo "Testing connectivity to ${{ secrets.REMOTE_IP }}..."
+          ping -c 4 ${{ secrets.REMOTE_IP }} || echo "Ping failed"
+          nc -zv -w 5 ${{ secrets.REMOTE_IP }} 22 || echo "TCP 22 is unreachable"
+
       - name: Deploy to VPS
         uses: appleboy/ssh-action@master
         with:
