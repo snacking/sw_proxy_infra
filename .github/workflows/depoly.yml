@@ -40,6 +40,15 @@ jobs:
             UPTIME_KUMA_PORT=${{ secrets.UPTIME_KUMA_PORT }}
             EOF
 
+            if ! command -v envsubst &> /dev/null; then
+                echo "Installing envsubst..."
+                apt-get update && apt-get install -y gettext-base
+            fi
+
+            echo "Generating Hysteria2 config from template..."
+            export $(cat .env | xargs)
+            envsubst < $PROJECT_DIR/hysteria2/config.yaml.template > $PROJECT_DIR/hysteria2/config.yaml
+
             echo "Checking Nginx configuration template..."
             docker run --rm --env-file .env \
               -v $PROJECT_DIR/nginx/templates:/etc/nginx/templates:ro \
@@ -54,7 +63,7 @@ jobs:
             
             echo "Deployment starting..."
             docker compose up -d --remove-orphans
-            docker restart nginx-fake
+            docker restart hy2 nginx-fake
 
             echo "--- Deployment Status ---"
             sleep 5

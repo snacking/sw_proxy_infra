@@ -4,11 +4,9 @@ services:
     container_name: hy2
     restart: always
     network_mode: host
-    environment:
-      - HY2_PASSWORD=${HY2_PASSWORD}
     volumes:
-      - ./hysteria2/config.yaml:/etc/hysteria/config.yaml
-      - ${CERT_PATH}:/etc/letsencrypt
+      - ./hysteria2/config.yaml:/etc/hysteria/config.yaml:ro
+      - ${CERT_PATH}:/etc/letsencrypt:ro
     command: ["server", "-c", "/etc/hysteria/config.yaml"]
     logging: &default-logging
       driver: "json-file"
