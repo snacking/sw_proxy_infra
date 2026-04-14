@@ -14,7 +14,14 @@ masquerade:
     url: http://127.0.0.1:${MASQUERADE_PORT}
     rewriteHost: true
 
+maxIdleTimeout: 
+  120s
+
+disablePathMTUDiscovery: 
+  true
+
 quic:
   initStreamReceiveWindow: 8388608
   initConnReceiveWindow: 20971520
   maxConnReceiveWindow: 20971520
+  maxIdleTimeout: 120s
