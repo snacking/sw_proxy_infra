@@ -16,10 +16,15 @@ jobs:
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@master
+        env:
+          VLESS_UUID: ${{ secrets.VLESS_UUID }}
+          REALITY_PRIVATE_KEY: ${{ secrets.REALITY_PRIVATE_KEY }}
+          REALITY_SHORT_ID: ${{ secrets.REALITY_SHORT_ID }}
         with:
           host: ${{ secrets.REMOTE_IP }}
           username: ${{ secrets.REMOTE_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: VLESS_UUID,REALITY_PRIVATE_KEY,REALITY_SHORT_ID
           script: |
             PROJECT_DIR="/root/sw_proxy_infra"
             
@@ -38,7 +43,15 @@ jobs:
             MASQUERADE_PORT=${{ secrets.MASQUERADE_PORT }}
             NGINX_LISTEN_PORT=${{ secrets.NGINX_LISTEN_PORT }}
             UPTIME_KUMA_PORT=${{ secrets.UPTIME_KUMA_PORT }}
+            VLESS_UUID=$VLESS_UUID
+            REALITY_PRIVATE_KEY=$REALITY_PRIVATE_KEY
+            REALITY_SHORT_ID=$REALITY_SHORT_ID
             EOF
+
+            if [ -z "$VLESS_UUID" ] || [ -z "$REALITY_PRIVATE_KEY" ] || [ -z "$REALITY_SHORT_ID" ]; then
+                echo "VLESS_UUID, REALITY_PRIVATE_KEY, and REALITY_SHORT_ID secrets must be configured."
+                exit 1
+            fi
 
             if ! command -v envsubst &> /dev/null; then
                 echo "Installing envsubst..."
@@ -48,22 +61,30 @@ jobs:
             echo "Generating Hysteria2 config from template..."
             export $(cat .env | xargs)
             envsubst < $PROJECT_DIR/hysteria2/config.yaml.template > $PROJECT_DIR/hysteria2/config.yaml
+            envsubst < $PROJECT_DIR/xray/config.json.template > $PROJECT_DIR/xray/config.json
 
             echo "Checking Nginx configuration template..."
             docker run --rm --env-file .env \
               -v $PROJECT_DIR/nginx/templates:/etc/nginx/templates:ro \
+              -v $CERT_PATH:/etc/letsencrypt:ro \
               nginx:alpine \
-              sh -c "envsubst '\$NGINX_LISTEN_PORT' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -t" > /tmp/nginx_check 2>&1
+              sh -c "envsubst '\$NGINX_LISTEN_PORT \$DOMAIN' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -t" > /tmp/nginx_check 2>&1
             
             if [ $? -ne 0 ]; then
               echo "Nginx config is invalid! Deployment aborted."
               cat /tmp/nginx_check
               exit 1
             fi
-            
+
+            echo "Checking Xray configuration..."
+            docker run --rm \
+              -v "$PROJECT_DIR/xray/config.json:/etc/xray/config.json:ro" \
+              ghcr.io/xtls/xray-core:26.10.29 \
+              run -test -config /etc/xray/config.json
+
             echo "Deployment starting..."
             docker compose up -d --remove-orphans
-            docker restart hy2 nginx-fake
+            docker restart hy2 nginx-fake xray
 
             echo "--- Deployment Status ---"
             sleep 5
@@ -77,6 +98,13 @@ jobs:
               docker logs hy2 --tail 20
               exit 1
             fi
+            if [ "$(docker inspect -f '{{.State.Running}}' xray)" == "true" ]; then
+              echo "Xray is running."
+            else
+              echo "Xray failed to start."
+              docker logs xray --tail 20
+              exit 1
+            fi
 
       - name: Discord Notification
         uses: rjstone/discord-webhook-notify@v1
@@ -87,6 +115,5 @@ jobs:
             **Deploy Status**: ${{ job.status }}
             **Node**: `${{ secrets.DOMAIN }}:${{ secrets.HY2_PORT }}`
             **Monitor**: `http://${{ secrets.REMOTE_IP }}:${{ secrets.UPTIME_KUMA_PORT }}`
-            **Password**: `${{ secrets.HY2_PASSWORD }}`
             Triggered by: ${{ github.event_name }}
           webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}

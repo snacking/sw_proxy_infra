@@ -20,11 +20,26 @@ services:
     restart: always
     ports:
       - "${MASQUERADE_PORT}:${NGINX_LISTEN_PORT}"
+      - "${LOCALHOST}:${XRAY_UNAUTH_PORT}:${XRAY_UNAUTH_PORT}"
     environment:
       - NGINX_LISTEN_PORT=${NGINX_LISTEN_PORT}
+      - DOMAIN=${DOMAIN}
     volumes:
       - ./nginx/templates:/etc/nginx/templates:ro
       - ./nginx/html:/usr/share/nginx/html:ro
+      - ${CERT_PATH}:/etc/letsencrypt:ro
+    logging: *default-logging
+
+  xray:
+    image: ghcr.io/xtls/xray-core:26.10.29
+    container_name: xray
+    restart: always
+    network_mode: host
+    depends_on:
+      - nginx-fake
+    volumes:
+      - ./xray/config.json:/etc/xray/config.json:ro
+    command: ["run", "-config", "/etc/xray/config.json"]
     logging: *default-logging
 
   uptime-kuma:
