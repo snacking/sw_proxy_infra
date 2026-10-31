@@ -27,6 +27,7 @@ jobs:
           envs: VLESS_UUID,REALITY_PRIVATE_KEY,REALITY_SHORT_ID
           script: |
             set -e
+            umask 077
             PROJECT_DIR="/root/sw_proxy_infra"
             
             if [ ! -d "$PROJECT_DIR" ]; then
@@ -64,7 +65,16 @@ jobs:
             echo "Generating Hysteria2 config from template..."
             export $(cat .env | xargs)
             envsubst < $PROJECT_DIR/hysteria2/config.yaml.template > $PROJECT_DIR/hysteria2/config.yaml
-            envsubst < $PROJECT_DIR/xray/config.json.template > $PROJECT_DIR/xray/config.json
+            XRAY_CONFIG="$PROJECT_DIR/xray/config.json"
+            if [ -d "$XRAY_CONFIG" ]; then
+              echo "Removing empty directory left by an earlier Xray bind mount."
+              rmdir "$XRAY_CONFIG" || {
+                echo "Xray config path is a non-empty directory; refusing to remove it."
+                exit 1
+              }
+            fi
+            envsubst < "$PROJECT_DIR/xray/config.json.template" > "$XRAY_CONFIG.tmp"
+            mv "$XRAY_CONFIG.tmp" "$XRAY_CONFIG"
 
             echo "Checking Nginx configuration template..."
             if ! docker run --rm --env-file .env \
