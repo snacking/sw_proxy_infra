@@ -75,6 +75,7 @@ jobs:
             fi
             envsubst < "$PROJECT_DIR/xray/config.json.template" > "$XRAY_CONFIG.tmp"
             mv "$XRAY_CONFIG.tmp" "$XRAY_CONFIG"
+            chmod 644 "$XRAY_CONFIG"
 
             echo "Checking Nginx configuration template..."
             if ! docker run --rm --env-file .env \
