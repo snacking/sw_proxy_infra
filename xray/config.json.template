@@ -21,7 +21,7 @@
         "security": "reality",
         "realitySettings": {
           "show": false,
-          "target": "${LOCALHOST}:${XRAY_UNAUTH_PORT}",
+          "target": "127.0.0.1:${XRAY_UNAUTH_PORT}",
           "serverNames": ["${DOMAIN}"],
           "privateKey": "${REALITY_PRIVATE_KEY}",
           "shortIds": ["${REALITY_SHORT_ID}"]

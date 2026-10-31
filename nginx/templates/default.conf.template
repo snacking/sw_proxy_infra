@@ -9,7 +9,7 @@ server {
 }
 
 server {
-    listen       9443 ssl;
+    listen       ${XRAY_UNAUTH_PORT} ssl;
     server_name  ${DOMAIN};
 
     ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;

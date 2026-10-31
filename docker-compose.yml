@@ -20,7 +20,7 @@ services:
     restart: always
     ports:
       - "${MASQUERADE_PORT}:${NGINX_LISTEN_PORT}"
-      - "${LOCALHOST}:${XRAY_UNAUTH_PORT}:${XRAY_UNAUTH_PORT}"
+      - "127.0.0.1:${XRAY_UNAUTH_PORT}:${XRAY_UNAUTH_PORT}"
     environment:
       - NGINX_LISTEN_PORT=${NGINX_LISTEN_PORT}
       - DOMAIN=${DOMAIN}
@@ -31,7 +31,7 @@ services:
     logging: *default-logging
 
   xray:
-    image: ghcr.io/xtls/xray-core:26.10.29
+    image: ghcr.io/xtls/xray-core:latest
     container_name: xray
     restart: always
     network_mode: host
@@ -47,7 +47,7 @@ services:
     container_name: uptime-kuma
     restart: always
     ports:
-      - "${UPTIME_KUMA_PORT}:3001"
+      - "${UPTIME_KUMA_PORT}:${UPTIME_KUMA_DEFAULT_PORT}"
     volumes:
       - ./uptime-kuma:/app/data
     logging: *default-logging
