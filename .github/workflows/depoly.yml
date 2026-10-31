@@ -26,6 +26,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: VLESS_UUID,REALITY_PRIVATE_KEY,REALITY_SHORT_ID
           script: |
+            set -e
             PROJECT_DIR="/root/sw_proxy_infra"
             
             if [ ! -d "$PROJECT_DIR" ]; then
@@ -43,9 +44,11 @@ jobs:
             MASQUERADE_PORT=${{ secrets.MASQUERADE_PORT }}
             NGINX_LISTEN_PORT=${{ secrets.NGINX_LISTEN_PORT }}
             UPTIME_KUMA_PORT=${{ secrets.UPTIME_KUMA_PORT }}
-            VLESS_UUID=$VLESS_UUID
-            REALITY_PRIVATE_KEY=$REALITY_PRIVATE_KEY
-            REALITY_SHORT_ID=$REALITY_SHORT_ID
+            XRAY_PORT=${{ secrets.XRAY_PORT }}
+            XRAY_UNAUTH_PORT=${{ secrets.XRAY_UNAUTH_PORT }}
+            VLESS_UUID=${{ secrets.VLESS_UUID }}
+            REALITY_PRIVATE_KEY=${{ secrets.REALITY_PRIVATE_KEY }}
+            REALITY_SHORT_ID=${{ secrets.REALITY_SHORT_ID }}
             EOF
 
             if [ -z "$VLESS_UUID" ] || [ -z "$REALITY_PRIVATE_KEY" ] || [ -z "$REALITY_SHORT_ID" ]; then
@@ -64,24 +67,27 @@ jobs:
             envsubst < $PROJECT_DIR/xray/config.json.template > $PROJECT_DIR/xray/config.json
 
             echo "Checking Nginx configuration template..."
-            docker run --rm --env-file .env \
+            if ! docker run --rm --env-file .env \
               -v $PROJECT_DIR/nginx/templates:/etc/nginx/templates:ro \
               -v $CERT_PATH:/etc/letsencrypt:ro \
               nginx:alpine \
-              sh -c "envsubst '\$NGINX_LISTEN_PORT \$DOMAIN' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -t" > /tmp/nginx_check 2>&1
-            
-            if [ $? -ne 0 ]; then
+              sh -c "envsubst '\$NGINX_LISTEN_PORT \$XRAY_UNAUTH_PORT \$DOMAIN' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -t" > /tmp/nginx_check 2>&1; then
               echo "Nginx config is invalid! Deployment aborted."
               cat /tmp/nginx_check
               exit 1
             fi
 
             echo "Checking Xray configuration..."
+            if [ ! -s "$PROJECT_DIR/xray/config.json" ]; then
+              echo "Generated Xray config is missing or empty."
+              exit 1
+            fi
             docker run --rm \
               -v "$PROJECT_DIR/xray/config.json:/etc/xray/config.json:ro" \
-              ghcr.io/xtls/xray-core:26.10.29 \
+              ghcr.io/xtls/xray-core:latest \
               run -test -config /etc/xray/config.json
 
+            docker compose --env-file .env config -q
             echo "Deployment starting..."
             docker compose up -d --remove-orphans
             docker restart hy2 nginx-fake xray
