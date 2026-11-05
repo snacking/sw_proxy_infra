@@ -16,7 +16,7 @@ services:
 
   nginx-fake:
     image: nginx:alpine
-    container_name: nginx-fake-fa
+    container_name: nginx-fake
     restart: always
     ports:
       - "${MASQUERADE_PORT}:${NGINX_LISTEN_PORT}"
