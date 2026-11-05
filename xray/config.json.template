@@ -1,6 +1,6 @@
 {
   "log": {
-    "loglevel": "warning"
+    "loglevel": "debug"
   },
   "inbounds": [
     {
@@ -24,7 +24,8 @@
           "target": "127.0.0.1:${XRAY_UNAUTH_PORT}",
           "serverNames": ["${DOMAIN}"],
           "privateKey": "${REALITY_PRIVATE_KEY}",
-          "shortIds": ["${REALITY_SHORT_ID}"]
+          "shortIds": ["${REALITY_SHORT_ID}"],
+          "minClientVer": "1.0.0" 
         }
       }
     }
