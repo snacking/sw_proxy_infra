@@ -1,4 +1,4 @@
 .env
 /hysteria2/config.yaml
 /xray/config.json
-*.md
+/uptime-kuma/

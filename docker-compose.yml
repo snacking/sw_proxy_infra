@@ -19,6 +19,7 @@ services:
     container_name: nginx-fake
     restart: always
     ports:
+      - "${PANEL_HTTPS_PORT:-443}:443"
       - "${MASQUERADE_PORT}:${NGINX_LISTEN_PORT}"
       - "127.0.0.1:${XRAY_UNAUTH_PORT}:${XRAY_UNAUTH_PORT}"
     environment:
@@ -29,6 +30,40 @@ services:
       - ./nginx/templates:/etc/nginx/templates:ro
       - ./nginx/html:/usr/share/nginx/html:ro
       - ${CERT_PATH}:/etc/letsencrypt:ro
+    networks:
+      default: {}
+      panel:
+        ipv4_address: 172.29.44.2
+    logging: *default-logging
+
+  panel:
+    image: alpine:3.23
+    container_name: lisw-panel
+    restart: unless-stopped
+    entrypoint: ["/opt/lisw-panel/current/panel"]
+    working_dir: /opt/lisw-panel/current
+    environment:
+      LISTEN_ADDR: 0.0.0.0:8081
+      STATIC_DIR: /opt/lisw-panel/current/dist
+      DATABASE_CONFIG_FILE: /run/secrets/database.json
+      COOKIE_SECURE: "true"
+      TRUSTED_PROXY_IP: 172.29.44.2
+      GOMEMLIMIT: 64MiB
+      GOMAXPROCS: "1"
+    ports:
+      - "127.0.0.1:18081:8081"
+    volumes:
+      - /opt/lisw-panel/current:/opt/lisw-panel/current:ro
+      - /etc/lisw-panel/database.json:/run/secrets/database.json:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 96m
+    cpus: 0.30
+    pids_limit: 32
+    networks:
+      panel:
+        ipv4_address: 172.29.44.3
     logging: *default-logging
 
   xray:
@@ -52,3 +87,9 @@ services:
     volumes:
       - ./uptime-kuma:/app/data
     logging: *default-logging
+
+networks:
+  panel:
+    ipam:
+      config:
+        - subnet: 172.29.44.0/24
